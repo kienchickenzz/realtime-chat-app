@@ -1,0 +1,43 @@
+services:
+    chatapp-redis:
+        image: redis:6-alpine
+        container_name: chatapp-redis
+        restart: no
+        ports:
+            - '6379:6379'
+        volumes:
+            - ./volumes/redis:/data
+        networks:
+            - chatapp-net
+        command: [ "redis-server", "--requirepass", "${REDIS_PASSWORD:-Pa55w.rd}" ]
+
+    chatapp-postgres:
+        image: postgres:15-alpine
+        container_name: chatapp-postgres
+        restart: no
+        networks:
+            - chatapp-net
+        ports:
+            - "5432:5432"
+        volumes:
+            - ./volumes/postgres:/var/lib/postgresql/data
+        environment:
+            - POSTGRES_DB=${DB_DATABASE:-chatapp}
+            - POSTGRES_USER=${DB_USERNAME:-postgres}
+            - POSTGRES_PASSWORD=${DB_PASSWORD:-Pa55w.rd}
+        command: >
+            postgres -c 'max_connections=${POSTGRES_MAX_CONNECTIONS:-100}'
+                    -c 'shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}'
+                    -c 'work_mem=${POSTGRES_WORK_MEM:-4MB}'
+                    -c 'maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}'
+                    -c 'effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-4096MB}'
+        healthcheck:
+            test: [ 'CMD', 'pg_isready' ]
+            interval: 1s
+            timeout: 3s
+            retries: 60
+
+
+networks:
+    chatapp-net:
+        driver: bridge

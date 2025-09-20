@@ -1,0 +1,311 @@
+import bcrypt from 'bcryptjs'
+import { StatusCodes } from 'http-status-codes'
+import moment from 'moment'
+import { DataSource, QueryRunner } from 'typeorm'
+import { InternalError } from '../../../errors/internalError'
+import { getRunningExpressApp } from '../../../utils/getRunningExpressApp'
+import { v4 as uuidv4 } from 'uuid'
+import { User } from '../../database/entities/User'
+import { isInvalidEmail, isInvalidName, isInvalidPassword, isInvalidUUID } from '../../utils/validation.util'
+import { getHash, compareHash } from '../../utils/encryption.util'
+import { generateTempToken } from '../../utils/tempTokenUtils'
+import { sendPasswordResetEmail } from '../../utils/sendEmail'
+
+export const enum UserErrorMessage {
+    EXPIRED_TEMP_TOKEN = 'Expired Temporary Token',
+    INVALID_TEMP_TOKEN = 'Invalid Temporary Token',
+    INVALID_USER_ID = 'Invalid User Id',
+    INVALID_USER_EMAIL = 'Invalid User Email',
+    INVALID_USER_CREDENTIAL = 'Invalid User Credential',
+    INVALID_USER_NAME = 'Invalid User Name',
+    USER_EMAIL_ALREADY_EXISTS = 'User Email Already Exists',
+    USER_NOT_FOUND = 'User Not Found',
+    INCORRECT_USER_EMAIL_OR_CREDENTIALS = 'Incorrect Email or Password'
+}
+
+export interface RegisterDTO {
+    name: string
+    email: string
+    password: string
+}
+
+export interface LoginDTO {
+    email: string
+    password: string
+}
+
+export interface ForgotPasswordDTO {
+    email: string
+}
+
+export interface ResetPasswordDTO {
+    email: string
+    token: string
+    password: string
+}
+
+export class UserService {
+    private dataSource: DataSource | undefined
+
+    constructor() {
+        // Lazy initialization - don't get the datasource until it's needed
+    }
+
+    private getDataSource(): DataSource {
+        if (!this.dataSource) {
+            const appServer = getRunningExpressApp()
+            this.dataSource = appServer.AppDataSource
+        }
+        return this.dataSource
+    }
+
+    // Validation methods
+    private validateUserId(id: string | undefined) {
+        if (isInvalidUUID(id)) throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.INVALID_USER_ID)
+    }
+
+    private validateUserName(name: string | undefined) {
+        if (isInvalidName(name)) throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.INVALID_USER_NAME)
+    }
+
+    private validateUserEmail(email: string | undefined) {
+        if (isInvalidEmail(email)) throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.INVALID_USER_EMAIL)
+    }
+
+    private validatePassword(password: string | undefined) {
+        if (isInvalidPassword(password)) throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.INVALID_USER_CREDENTIAL)
+    }
+
+    private encryptPassword(password: string): string {
+        this.validatePassword(password)
+        return getHash(password)
+    }
+
+    // Database operations
+    private async findUserByEmail(email: string, queryRunner: QueryRunner): Promise<User | null> {
+        this.validateUserEmail(email)
+        return await queryRunner.manager.findOneBy(User, { email })
+    }
+
+    private async findUserByToken(token: string, queryRunner: QueryRunner): Promise<User | null> {
+        return await queryRunner.manager.findOneBy(User, { tempToken: token })
+    }
+
+    // Main service methods
+    public async register(data: RegisterDTO): Promise<Partial<User>> {
+        const queryRunner = this.getDataSource().createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            await queryRunner.startTransaction()
+
+            // Check if user already exists
+            const existingUser = await this.findUserByEmail(data.email, queryRunner)
+            if (existingUser) {
+                throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.USER_EMAIL_ALREADY_EXISTS)
+            }
+
+            // Validate input
+            this.validateUserName(data.name)
+            this.validateUserEmail(data.email)
+
+            // Create new user
+            const hashedPassword = this.encryptPassword(data.password)
+            const tempToken = generateTempToken()
+            const tokenExpiry = new Date()
+            const expiryInHours = process.env.INVITE_TOKEN_EXPIRY_IN_HOURS ? parseInt(process.env.INVITE_TOKEN_EXPIRY_IN_HOURS) : 24
+            tokenExpiry.setHours(tokenExpiry.getHours() + expiryInHours)
+
+            const newUser = queryRunner.manager.create(User, {
+                id: uuidv4(),
+                name: data.name,
+                email: data.email,
+                credential: hashedPassword,
+                tempToken,
+                tokenExpiry
+            })
+
+            const savedUser = await queryRunner.manager.save(User, newUser)
+
+            await queryRunner.commitTransaction()
+
+            // Return user without sensitive data
+            const { credential, tempToken: token, tokenExpiry: expiry, ...userResponse } = savedUser
+            return userResponse
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction()
+            throw error
+        } finally {
+            await queryRunner.release()
+        }
+    }
+
+    public async login(data: LoginDTO): Promise<User> {
+        const queryRunner = this.getDataSource().createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            // Find user by email
+            const user = await this.findUserByEmail(data.email, queryRunner)
+            if (!user) {
+                throw new InternalError(StatusCodes.NOT_FOUND, UserErrorMessage.USER_NOT_FOUND)
+            }
+
+            // Check password
+            if (!user.credential) {
+                throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.INVALID_USER_CREDENTIAL)
+            }
+
+            if (!compareHash(data.password, user.credential)) {
+                throw new InternalError(StatusCodes.UNAUTHORIZED, UserErrorMessage.INCORRECT_USER_EMAIL_OR_CREDENTIALS)
+            }
+
+            return user
+
+        } finally {
+            await queryRunner.release()
+        }
+    }
+
+    public async forgotPassword(data: ForgotPasswordDTO): Promise<void> {
+        const queryRunner = this.getDataSource().createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            await queryRunner.startTransaction()
+
+            // Find user by email
+            const user = await this.findUserByEmail(data.email, queryRunner)
+            if (!user) {
+                throw new InternalError(StatusCodes.NOT_FOUND, UserErrorMessage.USER_NOT_FOUND)
+            }
+
+            // Generate reset token
+            const tempToken = generateTempToken()
+            const tokenExpiry = new Date()
+            const expiryInMins = process.env.PASSWORD_RESET_TOKEN_EXPIRY_IN_MINUTES 
+                ? parseInt(process.env.PASSWORD_RESET_TOKEN_EXPIRY_IN_MINUTES) 
+                : 15
+            tokenExpiry.setMinutes(tokenExpiry.getMinutes() + expiryInMins)
+
+            // Update user with reset token
+            user.tempToken = tempToken
+            user.tokenExpiry = tokenExpiry
+            await queryRunner.manager.save(User, user)
+
+            // Send reset email
+            const resetLink = `${process.env.APP_URL}/reset-password?token=${tempToken}`
+            await sendPasswordResetEmail(data.email, resetLink)
+
+            await queryRunner.commitTransaction()
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction()
+            throw error
+        } finally {
+            await queryRunner.release()
+        }
+    }
+
+    public async resetPassword(data: ResetPasswordDTO): Promise<void> {
+        const queryRunner = this.getDataSource().createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            await queryRunner.startTransaction()
+
+            // Find user by email
+            const user = await this.findUserByEmail(data.email, queryRunner)
+            if (!user) {
+                throw new InternalError(StatusCodes.NOT_FOUND, UserErrorMessage.USER_NOT_FOUND)
+            }
+
+            // Validate token
+            if (user.tempToken !== data.token) {
+                throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.INVALID_TEMP_TOKEN)
+            }
+
+            // Check token expiry
+            if (!user.tokenExpiry) {
+                throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.INVALID_TEMP_TOKEN)
+            }
+
+            const now = moment()
+            const expiryInMins = process.env.PASSWORD_RESET_TOKEN_EXPIRY_IN_MINUTES 
+                ? parseInt(process.env.PASSWORD_RESET_TOKEN_EXPIRY_IN_MINUTES) 
+                : 15
+            const diff = now.diff(user.tokenExpiry, 'minutes')
+            
+            if (Math.abs(diff) > expiryInMins) {
+                throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.EXPIRED_TEMP_TOKEN)
+            }
+
+            // Update password and clear token
+            const hashedPassword = this.encryptPassword(data.password)
+            user.credential = hashedPassword
+            user.tempToken = undefined
+            user.tokenExpiry = undefined
+
+            await queryRunner.manager.save(User, user)
+            await queryRunner.commitTransaction()
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction()
+            throw error
+        } finally {
+            await queryRunner.release()
+        }
+    }
+
+    // Additional utility methods
+    public async getUserById(id: string): Promise<User | null> {
+        const queryRunner = this.getDataSource().createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            this.validateUserId(id)
+            return await queryRunner.manager.findOneBy(User, { id })
+        } finally {
+            await queryRunner.release()
+        }
+    }
+
+    public async getUserByEmail(email: string): Promise<User | null> {
+        const queryRunner = this.getDataSource().createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            return await this.findUserByEmail(email, queryRunner)
+        } finally {
+            await queryRunner.release()
+        }
+    }
+
+    public async verifyUser(token: string): Promise<void> {
+        const queryRunner = this.getDataSource().createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            await queryRunner.startTransaction()
+
+            const user = await this.findUserByToken(token, queryRunner)
+            if (!user) {
+                throw new InternalError(StatusCodes.NOT_FOUND, UserErrorMessage.USER_NOT_FOUND)
+            }
+
+            // Clear verification token
+            user.tempToken = undefined
+            user.tokenExpiry = undefined
+            await queryRunner.manager.save(User, user)
+
+            await queryRunner.commitTransaction()
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction()
+            throw error
+        } finally {
+            await queryRunner.release()
+        }
+    }
+}

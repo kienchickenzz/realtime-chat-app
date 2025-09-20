@@ -1,0 +1,17 @@
+# env
+.env
+
+# dependencies
+**/volumes
+**/bun.lock
+
+# logs
+**/logs
+**/*.log
+
+# build
+**/dist
+**/build
+
+# dependencies
+**/node_modules

@@ -1,0 +1,12 @@
+#!/usr/bin/env node
+
+require('ts-node').register({
+  transpileOnly: true,
+  compilerOptions: {
+    module: 'commonjs'
+  }
+})
+
+const oclif = require('@oclif/core')
+
+oclif.run().then(require('@oclif/core/flush')).catch(require('@oclif/core/handle'))

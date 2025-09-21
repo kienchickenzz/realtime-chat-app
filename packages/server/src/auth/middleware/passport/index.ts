@@ -83,10 +83,8 @@ export const initializeJwtCookieMiddleware = async (app: express.Application) =>
                     await queryRunner.connect()
                     const userService = new UserService()
                     const body: any = {
-                        user: {
-                            email: email,
-                            credential: password
-                        }
+                        email: email,
+                        password: password
                     }
                     const response = await userService.login(body)
                     const loggedInUser: LoggedInUser = {
@@ -105,12 +103,12 @@ export const initializeJwtCookieMiddleware = async (app: express.Application) =>
     )
 
     // Routing resolver
-    app.post( '/api/v1/auth/resolve', async (req, res) => {
+    app.post( '/api/auth/resolve', async (req, res) => {
         // Always redirect to login page for single tenant
         return res.status(HttpStatusCode.Ok).json({ redirectUrl: '/signin' })
     })
 
-    app.post('/api/v1/auth/refreshToken', async (req, res) => {
+    app.post('/api/auth/refreshToken', async (req, res) => {
         const refreshToken = req.cookies.refreshToken
         if (!refreshToken) return res.sendStatus(401)
 
@@ -133,7 +131,7 @@ export const initializeJwtCookieMiddleware = async (app: express.Application) =>
         })
     })
 
-    app.post('/api/v1/auth/login', (req, res, next?) => {
+    app.post('/api/auth/login', (req, res, next?) => {
         passport.authenticate('login', async (err: any, user: LoggedInUser) => {
             try {
                 if (err || !user) {

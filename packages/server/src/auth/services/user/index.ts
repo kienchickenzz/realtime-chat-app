@@ -4,12 +4,14 @@ import moment from 'moment'
 import { DataSource, QueryRunner } from 'typeorm'
 import { InternalError } from '../../../errors/internalError'
 import { getRunningExpressApp } from '../../../utils/getRunningExpressApp'
+import { RedisEventPublisher } from '../../../pubsub/RedisEventPublisher'
 import { v4 as uuidv4 } from 'uuid'
 import { User } from '../../database/entities/User'
 import { isInvalidEmail, isInvalidName, isInvalidPassword, isInvalidUUID } from '../../utils/validation.util'
 import { getHash, compareHash } from '../../utils/encryption.util'
 import { generateTempToken } from '../../utils/tempTokenUtils'
 import { sendPasswordResetEmail } from '../../utils/sendEmail'
+import logger from '../../../utils/logger'
 
 export const enum UserErrorMessage {
     EXPIRED_TEMP_TOKEN = 'Expired Temporary Token',
@@ -79,6 +81,44 @@ export class UserService {
     private encryptPassword(password: string): string {
         this.validatePassword(password)
         return getHash(password)
+    }
+
+    private async triggerUserActivityUpdate(eventType: 'someone_sign_in' | 'someone_sign_out', userId: string, userName: string): Promise<void> {
+        const queryRunner = this.getDataSource().createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            await queryRunner.startTransaction()
+            
+            // Lấy tất cả user hiện có (exclude chính user đó và chỉ lấy user đang active)
+            const activeUsers = await queryRunner.manager.find(User, {
+                where: {
+                    // TODO: Thêm điều kiện isActive: true khi có field này
+                }
+            })
+            const targetUserIds = activeUsers
+                .filter(user => user.id !== userId)
+                .map(user => user.id)
+
+            await queryRunner.commitTransaction()
+
+            // Tạo instance RedisEventPublisher và loop publish từng user
+            const publisher = new RedisEventPublisher()
+            await publisher.connect()
+            
+            for (const channelId of targetUserIds) {
+                await publisher.publishUserActivity(eventType, userId, userName, channelId)
+            }
+            
+            await publisher.disconnect()
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction()
+            console.error('Failed to trigger user activity update:', error)
+            // Don't throw error to avoid breaking main flow
+        } finally {
+            await queryRunner.release()
+        }
     }
 
     // Database operations
@@ -160,6 +200,14 @@ export class UserService {
             if (!compareHash(data.password, user.credential)) {
                 throw new InternalError(StatusCodes.UNAUTHORIZED, UserErrorMessage.INCORRECT_USER_EMAIL_OR_CREDENTIALS)
             }
+
+            // Subscribe user to their channel for receiving notifications
+            const appServer = getRunningExpressApp()
+            appServer.redisSubscriber.subscribe(user.id)
+            logger.debug(`Subscribed user ${user.id} to their notification channel`)
+
+            // Trigger user sign-in activity update
+            await this.triggerUserActivityUpdate('someone_sign_in', user.id, user.name)
 
             return user
 

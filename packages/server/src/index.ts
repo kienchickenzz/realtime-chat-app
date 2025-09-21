@@ -3,7 +3,7 @@ import path from 'path'
 import cors from 'cors'
 import http from 'http'
 import cookieParser from 'cookie-parser'
-import { DataSource, IsNull } from 'typeorm'
+import { DataSource } from 'typeorm'
 import { getEncryptionKey } from './utils'
 import logger, { expressRequestLogger } from './utils/logger'
 import { getDataSource } from './DataSource'
@@ -13,13 +13,13 @@ import errorHandlerMiddleware from './middlewares/errors'
 import { WHITELIST_URLS } from './utils/constants'
 import { initializeJwtCookieMiddleware, verifyToken } from './auth/middleware/passport'
 // import { IdentityManager } from './IdentityManager'
-// import { SSEStreamer } from './utils/SSEStreamer'
+import { SSEStreamer } from './sse/SSEStreamer'
 import { LoggedInUser } from './auth/Interface'
 // import { IMetricsProvider } from './Interface.Metrics'
 // import { Prometheus } from './metrics/Prometheus'
 // import { OpenTelemetry } from './metrics/OpenTelemetry'
-// import { QueueManager } from './queue/QueueManager'
-// import { RedisEventSubscriber } from './queue/RedisEventSubscriber'
+import { QueueManager } from './queue/QueueManager'
+import { RedisEventSubscriber } from './pubsub/RedisEventSubscriber'
 import 'global-agent/bootstrap'
 
 declare global {
@@ -48,11 +48,11 @@ declare global {
 export class App {
     app: express.Application
     AppDataSource: DataSource = getDataSource()
-    // sseStreamer: SSEStreamer
+    sseStreamer: SSEStreamer
     // identityManager: IdentityManager
     // metricsProvider: IMetricsProvider
-    // queueManager: QueueManager
-    // redisSubscriber: RedisEventSubscriber
+    queueManager: QueueManager
+    redisSubscriber: RedisEventSubscriber
 
     constructor() {
         this.app = express()
@@ -77,25 +77,20 @@ export class App {
             logger.info('🔑 [server]: Encryption key initialized successfully')
 
             // Initialize SSE Streamer
-            // this.sseStreamer = new SSEStreamer()
-            // logger.info('🌊 [server]: SSE Streamer initialized successfully')
-
+            this.sseStreamer = new SSEStreamer()
+            logger.info('🌊 [server]: SSE Streamer initialized successfully')
+            
             // Init Queues
-            // this.queueManager = QueueManager.getInstance()
-            // this.queueManager.setupAllQueues({
-            //     appDataSource: this.AppDataSource,
-            // })
-            // logger.info('✅ [Queue]: All queues setup successfully')
+            this.queueManager = QueueManager.getInstance()
+            this.queueManager.setupAllQueues({
+                appDataSource: this.AppDataSource,
+                sseStreamer: this.sseStreamer,
+            })
+            logger.info('✅ [Queue]: All queues setup successfully')
 
-            // this.redisSubscriber = new RedisEventSubscriber(this.sseStreamer)
-            // await this.redisSubscriber.connect()
+            this.redisSubscriber = new RedisEventSubscriber(this.sseStreamer)
+            await this.redisSubscriber.connect()
             logger.info('🔗 [server]: Redis event subscriber connected successfully')
-
-            logger.error('🔴 TEST: Error level log')
-            logger.warn('🟡 TEST: Warn level log') 
-            logger.info('🔵 TEST: Info level log')
-            logger.verbose('🟣 TEST: Verbose level log')
-            logger.debug('🟢 TEST: Debug level log')
 
             logger.info('🎉 [server]: All initialization steps completed successfully!')
         } catch (error) {
@@ -133,8 +128,8 @@ export class App {
         })
 
         const whitelistURLs = WHITELIST_URLS
-        const URL_CASE_INSENSITIVE_REGEX: RegExp = /\/api\/v1\//i
-        const URL_CASE_SENSITIVE_REGEX: RegExp = /\/api\/v1\//
+        const URL_CASE_INSENSITIVE_REGEX: RegExp = /\/api\//i
+        const URL_CASE_SENSITIVE_REGEX: RegExp = /\/api\//
 
         await initializeJwtCookieMiddleware(this.app)
 
@@ -187,21 +182,19 @@ export class App {
         //     }
         // }
 
-        this.app.use('/api/v1', apiRouter )
+        this.app.use('/api', apiRouter )
 
         // ----------------------------------------
         // Configure number of proxies in Host Environment
         // ----------------------------------------
-        this.app.get('/api/v1/ip', (request, response) => {
+        this.app.get('/api/ip', (request, response) => {
             response.send({
                 ip: request.ip,
                 msg: 'Check returned IP address in the response. If it matches your current IP address ( which you can get by going to http://ip.nfriedly.com/ or https://api.ipify.org/ ), then the number of proxies is correct and the rate limiter should now work correctly. If not, increase the number of proxies by 1 and restart Cloud-Hosted Flowise until the IP address matches your own. Visit https://docs.flowiseai.com/configuration/rate-limit#cloud-hosted-rate-limit-setup-guide for more information.'
             })
         })
 
-        if ( process.env.ENABLE_BULLMQ_DASHBOARD === 'true' ) {
-            // this.app.use( '/admin/queues', this.queueManager.getBullBoardRouter() )
-        }
+        this.app.use( '/admin/queues', this.queueManager.getBullBoardRouter() )
 
         // ----------------------------------------
         // Serve UI static
@@ -224,9 +217,7 @@ export class App {
     async stopApp() {
         try {
             const removePromises: any[] = []
-            // if (this.queueManager) {
-            //     removePromises.push(this.redisSubscriber.disconnect())
-            // }
+            removePromises.push( this.redisSubscriber.disconnect() )
             await Promise.all(removePromises)
         } catch (e) {
             logger.error(`❌[server]: Server shut down error: ${e}`)

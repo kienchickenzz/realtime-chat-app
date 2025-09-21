@@ -19,7 +19,7 @@ export class UserController {
             next(error)
         }
     }
-
+    
     public async login(req: Request, res: Response, next: NextFunction) {
         try {
             const data: LoginDTO = req.body

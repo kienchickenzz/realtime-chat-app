@@ -30,55 +30,55 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
-  //   getMessages: async (userId) => {
-  //       set({ isMessagesLoading: true });
-  //       try {
-  //           const res = await axiosInstance.get(`/messages/${userId}`);
-  //           set({ messages: res.data });
-  //       } catch (error) {
-  //           toast.error(error.response.data.message);
-  //       } finally {
-  //           set({ isMessagesLoading: false });
-  //       }
-  //   },
+    getMessages: async (userId) => {
+        set({ isMessagesLoading: true });
+        try {
+            const res = await axiosInstance.get(`/messages/${userId}`);
+            set({ messages: res.data });
+        } catch (error) {
+            toast.error(error.response.data.message);
+        } finally {
+            set({ isMessagesLoading: false });
+        }
+    },
 
-  // sendMessage: async (messageData) => {
-  //   const { selectedUser, messages } = get();
-  //   try {
-  //     const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
-  //     set({ messages: [...messages, res.data] });
-  //   } catch (error) {
-  //     toast.error(error.response.data.message);
-  //   }
-  // },
+    sendMessage: async (messageData) => {
+        const { selectedUser, messages } = get();
+        try {
+            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
+            set({ messages: [...messages, res.data] });
+        } catch (error) {
+            toast.error(error.response.data.message);
+        }
+    },
 
-  // subscribeToMessages: () => {
-  //   const { selectedUser } = get();
-  //   if (!selectedUser) return;
+    subscribeToMessages: () => {
+        const { selectedUser } = get();
+        if (!selectedUser) return;
 
-  //   const handleNewMessage = (event) => {
-  //     const newMessage = event.detail;
-  //     const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
-  //     if (!isMessageSentFromSelectedUser) return;
+        const handleNewMessage = (event) => {
+            const newMessage = event.detail;
+            const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
+            if (!isMessageSentFromSelectedUser) return;
 
-  //     set({
-  //       messages: [...get().messages, newMessage],
-  //     });
-  //   };
+            set({
+                messages: [...get().messages, newMessage],
+            });
+        };
 
-  //   window.addEventListener("newMessage", handleNewMessage);
-    
-  //   // Store the handler for cleanup
-  //   get().messageHandler = handleNewMessage;
-  // },
+        window.addEventListener("newMessage", handleNewMessage);
+        
+        // Store the handler for cleanup
+        get().messageHandler = handleNewMessage;
+    },
 
-  // unsubscribeFromMessages: () => {
-  //   const messageHandler = get().messageHandler;
-  //   if (messageHandler) {
-  //     window.removeEventListener("newMessage", messageHandler);
-  //     set({ messageHandler: null });
-  //   }
-  // },
+    unsubscribeFromMessages: () => {
+        const messageHandler = get().messageHandler;
+        if (messageHandler) {
+            window.removeEventListener("newMessage", messageHandler);
+            set({ messageHandler: null });
+        }
+    },
 
-  // setSelectedUser: (selectedUser) => set({ selectedUser }),
+    setSelectedUser: (selectedUser) => set({ selectedUser }),
 }));

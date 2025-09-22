@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { axiosInstance } from "../lib/axios.js";
 import toast from "react-hot-toast";
-import { io } from "socket.io-client";
 
 const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:3000" : "/";
 
@@ -11,7 +10,7 @@ export const useAuthStore = create((set, get) => ({
     isLoggingIn: false,
     isUpdatingProfile: false,
     onlineUsers: [],
-    socket: null,
+    eventSource: null,
 
     signup: async (data) => {
         set({ isSigningUp: true });
@@ -19,7 +18,7 @@ export const useAuthStore = create((set, get) => ({
             const res = await axiosInstance.post("/auth/register", data);
             set({ authUser: res.data });
             toast.success("Account created successfully");
-            get().connectSocket();
+            get().connectSSE();
         } catch (error) {
             toast.error(error.response.data.message);
         } finally {
@@ -33,8 +32,8 @@ export const useAuthStore = create((set, get) => ({
             const res = await axiosInstance.post("/auth/login", data);
             set({ authUser: res.data });
             toast.success("Logged in successfully");
-
-            // get().connectSocket();
+            
+            get().connectSSE();
         } catch (error) {
             toast.error(error.response.data.message);
         } finally {
@@ -47,7 +46,7 @@ export const useAuthStore = create((set, get) => ({
             await axiosInstance.post("/auth/logout");
             set({ authUser: null });
             toast.success("Logged out successfully");
-            get().disconnectSocket();
+            get().disconnectSSE();
         } catch (error) {
             toast.error(error.response.data.message);
         }
@@ -67,24 +66,43 @@ export const useAuthStore = create((set, get) => ({
         }
     },
 
-    connectSocket: () => {
+    connectSSE: () => {
         const { authUser } = get();
-        if (!authUser || get().socket?.connected) return;
+        if (!authUser || get().eventSource) return;
 
-        const socket = io(BASE_URL, {
-            query: {
-                userId: authUser._id,
-            },
-        });
-        socket.connect();
+        const eventSource = new EventSource( `${ BASE_URL }/api/sse/connect`, {
+            withCredentials: true
+        } )
 
-        set({ socket: socket });
+        eventSource.onopen = () => {
+            console.log("SSE connection established");
+        };
 
-        socket.on("getOnlineUsers", (userIds) => {
+        eventSource.addEventListener("onlineUsers", (event) => {
+            const userIds = JSON.parse(event.data);
             set({ onlineUsers: userIds });
         });
+
+        eventSource.addEventListener("newMessage", (event) => {
+            const message = JSON.parse(event.data);
+            window.dispatchEvent(new CustomEvent("newMessage", { detail: message }));
+        });
+
+        eventSource.onerror = (error) => {
+            console.error("SSE connection error:", error);
+            if (eventSource.readyState === EventSource.CLOSED) {
+                console.log("SSE connection closed");
+            }
+        };
+
+        set({ eventSource });
     },
-    disconnectSocket: () => {
-        if (get().socket?.connected) get().socket.disconnect();
+
+    disconnectSSE: () => {
+        const eventSource = get().eventSource;
+        if (eventSource) {
+            eventSource.close();
+            set({ eventSource: null });
+        }
     },
-}));
+} ) )

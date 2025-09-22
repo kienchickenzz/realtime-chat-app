@@ -64,9 +64,9 @@ export function expressRequestLogger( req: Request, res: Response, next: NextFun
                 }
             },
             transports: [
-                new transports.Console( {
-                    level: process.env.LOG_LEVEL ?? 'info'
-                } ),
+                // new transports.Console( {
+                //     level: process.env.LOG_LEVEL ?? 'info'
+                // } ),
                 new transports.File( {
                     filename: path.join( logDir, logFileName ),
                     level: process.env.LOG_LEVEL ?? 'debug'

@@ -1,4 +1,10 @@
 export const WHITELIST_URLS = [
-    '/api/v1/auth/resolve',
-    '/api/v1/auth/login',
+    '/api/auth/resolve',
+    '/api/auth/login',
+    '/api/auth/register',
+
+
+    // '/api/user',
+
+    // '/api/sse/connect',
 ]

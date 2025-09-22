@@ -2,7 +2,7 @@
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { User } from '../../database/entities/User'
 
-const getAllUsers = async() => {
+const getAllUsers = async(excludeUserId?: string) => {
     const appServer = getRunningExpressApp()
     const dataSource = appServer.AppDataSource
     const queryRunner = dataSource.createQueryRunner()
@@ -12,7 +12,13 @@ const getAllUsers = async() => {
     try {
         await queryRunner.startTransaction()
         
-        const users = await queryRunner.manager.find(User)
+        let users = await queryRunner.manager.find(User)
+        
+        // Exclude the specified user if provided
+        // TODO: Thêm trường hợp để có thể sử dụng business user id
+        if (excludeUserId) {
+            users = users.filter(user => user.authUserId !== excludeUserId)
+        }
         
         await queryRunner.commitTransaction()
         

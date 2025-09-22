@@ -1,4 +1,5 @@
 import { createClient } from 'redis'
+import logger from '../utils/logger'
 
 export class RedisEventPublisher {
     private redisPublisher: ReturnType<typeof createClient>
@@ -66,18 +67,33 @@ export class RedisEventPublisher {
         }
     }
 
-    async publishUserActivity(eventType: 'someone_sign_in' | 'someone_sign_out', userId: string, userName: string, channelId: string) {
-        const eventData = {
-            eventType,
-            userId,
-            userName,
-        }
-
+    async publishUserSignInEvent( userId: string, data: any ) {
         try {
-            // Publish to single user's channel
-            await this.redisPublisher.publish(channelId, JSON.stringify(eventData))
+            this.redisPublisher.publish(
+                userId,
+                JSON.stringify({
+                    userId,
+                    eventType: 'someone_sign_in',
+                    data
+                })
+            )
         } catch (error) {
-            console.error(`Error publishing ${eventType} event to channel ${channelId}:`, error)
+            console.error('Error streaming start event:', error)
+        }
+    }
+
+    async publishUserSignOutEvent( userId: string, data: any ) {
+        try {
+            this.redisPublisher.publish(
+                userId,
+                JSON.stringify({
+                    userId,
+                    eventType: 'someone_sign_out',
+                    data
+                })
+            )
+        } catch (error) {
+            console.error('Error streaming start event:', error)
         }
     }
 }

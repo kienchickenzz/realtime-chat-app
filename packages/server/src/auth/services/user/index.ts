@@ -6,7 +6,8 @@ import { InternalError } from '../../../errors/internalError'
 import { getRunningExpressApp } from '../../../utils/getRunningExpressApp'
 import { RedisEventPublisher } from '../../../pubsub/RedisEventPublisher'
 import { v4 as uuidv4 } from 'uuid'
-import { User } from '../../database/entities/User'
+import { User as AuthUser } from '../../database/entities/User'
+import { User as BusinessUser } from '../../../database/entities/User'
 import { isInvalidEmail, isInvalidName, isInvalidPassword, isInvalidUUID } from '../../utils/validation.util'
 import { getHash, compareHash } from '../../utils/encryption.util'
 import { generateTempToken } from '../../utils/tempTokenUtils'
@@ -91,7 +92,7 @@ export class UserService {
             await queryRunner.startTransaction()
             
             // Lấy tất cả user hiện có (exclude chính user đó và chỉ lấy user đang active)
-            const activeUsers = await queryRunner.manager.find(User, {
+            const activeUsers = await queryRunner.manager.find(AuthUser, {
                 where: {
                     // TODO: Thêm điều kiện isActive: true khi có field này
                 }
@@ -106,9 +107,9 @@ export class UserService {
             const publisher = new RedisEventPublisher()
             await publisher.connect()
             
-            for (const channelId of targetUserIds) {
-                await publisher.publishUserActivity(eventType, userId, userName, channelId)
-            }
+            // for (const channelId of targetUserIds) {
+            //     await publisher.publishUserActivity(eventType, userId, userName, channelId)
+            // }
             
             await publisher.disconnect()
 
@@ -122,17 +123,17 @@ export class UserService {
     }
 
     // Database operations
-    private async findUserByEmail(email: string, queryRunner: QueryRunner): Promise<User | null> {
+    private async findUserByEmail(email: string, queryRunner: QueryRunner): Promise<AuthUser | null> {
         this.validateUserEmail(email)
-        return await queryRunner.manager.findOneBy(User, { email })
+        return await queryRunner.manager.findOneBy(AuthUser, { email })
     }
 
-    private async findUserByToken(token: string, queryRunner: QueryRunner): Promise<User | null> {
-        return await queryRunner.manager.findOneBy(User, { tempToken: token })
+    private async findUserByToken(token: string, queryRunner: QueryRunner): Promise<AuthUser | null> {
+        return await queryRunner.manager.findOneBy(AuthUser, { tempToken: token })
     }
 
     // Main service methods
-    public async register(data: RegisterDTO): Promise<Partial<User>> {
+    public async register(data: RegisterDTO): Promise<Partial<AuthUser>> {
         const queryRunner = this.getDataSource().createQueryRunner()
         await queryRunner.connect()
 
@@ -150,14 +151,15 @@ export class UserService {
             this.validateUserEmail(data.email)
 
             // Create new user
+            const authUserId = uuidv4()
             const hashedPassword = this.encryptPassword(data.password)
             const tempToken = generateTempToken()
             const tokenExpiry = new Date()
             const expiryInHours = process.env.INVITE_TOKEN_EXPIRY_IN_HOURS ? parseInt(process.env.INVITE_TOKEN_EXPIRY_IN_HOURS) : 24
             tokenExpiry.setHours(tokenExpiry.getHours() + expiryInHours)
 
-            const newUser = queryRunner.manager.create(User, {
-                id: uuidv4(),
+            const newUser = queryRunner.manager.create(AuthUser, {
+                id: authUserId,
                 name: data.name,
                 email: data.email,
                 credential: hashedPassword,
@@ -165,7 +167,16 @@ export class UserService {
                 tokenExpiry
             })
 
-            const savedUser = await queryRunner.manager.save(User, newUser)
+            const savedUser = await queryRunner.manager.save(AuthUser, newUser)
+
+            // Create corresponding business user record
+            const businessUser = queryRunner.manager.create(BusinessUser, {
+                id: uuidv4(),
+                authUserId: authUserId,
+                displayName: data.name
+            })
+
+            await queryRunner.manager.save(BusinessUser, businessUser)
 
             await queryRunner.commitTransaction()
 
@@ -181,7 +192,7 @@ export class UserService {
         }
     }
 
-    public async login(data: LoginDTO): Promise<User> {
+    public async login(data: LoginDTO): Promise<AuthUser> {
         const queryRunner = this.getDataSource().createQueryRunner()
         await queryRunner.connect()
 
@@ -240,7 +251,7 @@ export class UserService {
             // Update user with reset token
             user.tempToken = tempToken
             user.tokenExpiry = tokenExpiry
-            await queryRunner.manager.save(User, user)
+            await queryRunner.manager.save(AuthUser, user)
 
             // Send reset email
             const resetLink = `${process.env.APP_URL}/reset-password?token=${tempToken}`
@@ -295,7 +306,7 @@ export class UserService {
             user.tempToken = undefined
             user.tokenExpiry = undefined
 
-            await queryRunner.manager.save(User, user)
+            await queryRunner.manager.save(AuthUser, user)
             await queryRunner.commitTransaction()
 
         } catch (error) {
@@ -307,19 +318,19 @@ export class UserService {
     }
 
     // Additional utility methods
-    public async getUserById(id: string): Promise<User | null> {
+    public async getUserById(id: string): Promise<AuthUser | null> {
         const queryRunner = this.getDataSource().createQueryRunner()
         await queryRunner.connect()
 
         try {
             this.validateUserId(id)
-            return await queryRunner.manager.findOneBy(User, { id })
+            return await queryRunner.manager.findOneBy(AuthUser, { id })
         } finally {
             await queryRunner.release()
         }
     }
 
-    public async getUserByEmail(email: string): Promise<User | null> {
+    public async getUserByEmail(email: string): Promise<AuthUser | null> {
         const queryRunner = this.getDataSource().createQueryRunner()
         await queryRunner.connect()
 
@@ -345,7 +356,7 @@ export class UserService {
             // Clear verification token
             user.tempToken = undefined
             user.tokenExpiry = undefined
-            await queryRunner.manager.save(User, user)
+            await queryRunner.manager.save(AuthUser, user)
 
             await queryRunner.commitTransaction()
 

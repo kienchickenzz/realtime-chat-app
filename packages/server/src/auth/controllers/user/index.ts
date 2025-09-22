@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express'
 import { StatusCodes } from 'http-status-codes'
 import { UserService, RegisterDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO } from '../../services/user'
+import { getRunningExpressApp } from '../../../utils/getRunningExpressApp'
+import logger from '../../../utils/logger'
 
 export class UserController {
     private userService: UserService
@@ -24,6 +26,13 @@ export class UserController {
         try {
             const data: LoginDTO = req.body
             const user = await this.userService.login(data)
+            
+            // Add user to SSE streamer for real-time notifications
+            const appServer = getRunningExpressApp()
+            if (appServer.sseStreamer) {
+                appServer.sseStreamer.addClient(user.id, res)
+                logger.debug(`Added user ${user.id} to SSE streamer`)
+            }
             
             // Remove sensitive data from response
             const { credential, tempToken, tokenExpiry, ...userResponse } = user

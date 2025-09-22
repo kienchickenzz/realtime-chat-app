@@ -1,4 +1,5 @@
 import { Response } from 'express'
+import logger from '../utils/logger'
 
 type Client = {
     response: Response
@@ -13,7 +14,7 @@ export class SSEStreamer {
     addClient( userId: string, res: Response ) {
         // Lắng nghe sự kiện client disconnect
         res.on( 'close', () => {
-            console.log( `Client ${ userId } disconnected` );
+            logger.debug( `Client ${ userId } disconnected` );
             delete this.clients[ userId ];
         });
         
@@ -47,40 +48,25 @@ export class SSEStreamer {
         }
     }
 
-    // TODO: Object hóa 2 tham số id và name để dễ mở rộng hơn
-    streamSignIn( targetClientIds: string[] | string, userId: string, userName: string ) {
-        const targets = Array.isArray(targetClientIds) ? targetClientIds : [targetClientIds]
-        
-        targets.forEach( targetId => {
-            const client = this.clients[ targetId ]
-            if ( client ) {
-                const clientResponse = {
-                    event: 'sign_in',
-                    data: {
-                        userId: userId,
-                        userName: userName
-                    }
-                }
-                client.response.write( 'message:\ndata:' + JSON.stringify( clientResponse ) + '\n\n' )
+    streamSignIn( channelId: string, data: any ) {
+        const client = this.clients[channelId]
+        if (client) {
+            const clientResponse = {
+                event: 'someone_sign_in',
+                data: data
             }
-        } )
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
     }
 
-    streamSignOut( targetClientIds: string[] | string, userId: string, userName: string ) {
-        const targets = Array.isArray(targetClientIds) ? targetClientIds : [targetClientIds]
-        
-        targets.forEach( targetId => {
-            const client = this.clients[ targetId ]
-            if ( client ) {
-                const clientResponse = {
-                    event: 'sign_out',
-                    data: {
-                        userId: userId,
-                        userName: userName
-                    }
-                }
-                client.response.write( 'message:\ndata:' + JSON.stringify( clientResponse ) + '\n\n' )
+    streamSignOut( channelId: string, data: any ) {
+        const client = this.clients[channelId]
+        if (client) {
+            const clientResponse = {
+                event: 'someone_sign_out',
+                data: data
             }
-        } )
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
     }
 }

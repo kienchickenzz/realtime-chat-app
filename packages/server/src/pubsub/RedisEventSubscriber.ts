@@ -1,5 +1,6 @@
 import { createClient } from 'redis'
 import { SSEStreamer } from '../sse/SSEStreamer'
+import logger from '../utils/logger'
 
 export class RedisEventSubscriber {
     private redisSubscriber: ReturnType<typeof createClient>
@@ -76,33 +77,28 @@ export class RedisEventSubscriber {
     }
 
     private handleEvent( message: string ) {
-        try {
-            // Parse the message from Redis
-            const event = JSON.parse( message )
-            const { eventType, userId, userName } = event
-
-            // Stream the event to the client using switch case
-            switch (eventType) {
-                case 'start':
-                    this.sseStreamer.streamStartEvent( userId )
-                    break
-                
-                case 'someone_sign_in':
-                    // Stream sign-in event to current user's SSE connection
-                    this.sseStreamer.streamSignIn( userId, event.userId, userName )
-                    break
-                
-                case 'someone_sign_out':
-                    // Stream sign-out event to current user's SSE connection
-                    this.sseStreamer.streamSignOut( userId, event.userId, userName )
-                    break
-                
-                default:
-                    console.log(`Unknown event type: ${eventType}`)
-                    break
-            }
-        } catch (error) {
-            console.error('Error handling Redis event:', error)
+        // Parse the message from Redis
+        const event = JSON.parse( message )
+        const { userId, eventType, data } = event
+        
+        // Stream the event to the client using switch case
+        switch (eventType) {
+            case 'start':
+                this.sseStreamer.streamStartEvent( userId )
+                break
+            
+            case 'someone_sign_in':
+                // Stream sign-in event to current user's SSE connection
+                this.sseStreamer.streamSignIn( userId, data )
+                break
+            
+            case 'someone_sign_out':
+                // Stream sign-out event to current user's SSE connection
+                this.sseStreamer.streamSignOut( userId, data )
+                break
+            
+            default:
+                break
         }
     }
 }

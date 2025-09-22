@@ -5,7 +5,8 @@ import userService from '../../services/user'
 
 const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const users = await userService.getAllUsers()
+        const { excludedUserId } = req.query
+        const users = await userService.getAllUsers( excludedUserId as string )
         return res.status(StatusCodes.OK).json(users)
     } catch (error) {
         next(error)

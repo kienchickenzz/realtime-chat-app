@@ -143,10 +143,12 @@ export class App {
                     if (isWhitelisted) {
                         next()
                     } else if (req.headers['x-request-from'] === 'internal') {
+                        // TODO: Nghiên cứu mở rộng phần này, hiện tại verify cho cả 2 điều kiện if
                         verifyToken(req, res, next)
                     } else {
-                        // Không cần verify JWT - API hoàn toàn mở
-                        next()
+                        verifyToken(req, res, next)
+                        // // Không cần verify JWT - API hoàn toàn mở
+                        // next()
                     }
                 } else {
                     return res.status(401).json({ error: 'Unauthorized Access' })

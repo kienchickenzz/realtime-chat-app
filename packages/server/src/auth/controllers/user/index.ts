@@ -4,96 +4,43 @@ import { UserService, RegisterDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO
 import { getRunningExpressApp } from '../../../utils/getRunningExpressApp'
 import logger from '../../../utils/logger'
 
-export class UserController {
-    private userService: UserService
+const userService = new UserService() 
 
-    constructor() {
-        this.userService = new UserService()
+const register = async ( req: Request, res: Response, next: NextFunction ) => {
+    try {
+        const data: RegisterDTO = req.body
+        const user = await userService.register( data )
+        
+        return res.status( StatusCodes.CREATED ).json( user )
+    } catch ( error ) {
+        next( error )
     }
+}
 
-    public async register(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data: RegisterDTO = req.body
-            const user = await this.userService.register(data)
-            
-            return res.status(StatusCodes.CREATED).json( user )
-        } catch (error) {
-            next(error)
-        }
+const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const data: ForgotPasswordDTO = req.body
+        await userService.forgotPassword(data)
+        
+        return res.status( StatusCodes.OK )
+    } catch (error) {
+        next(error)
     }
-    
-    public async login(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data: LoginDTO = req.body
-            const user = await this.userService.login(data)
-            
-            // Add user to SSE streamer for real-time notifications
-            const appServer = getRunningExpressApp()
-            if (appServer.sseStreamer) {
-                appServer.sseStreamer.addClient(user.id, res)
-                logger.debug(`Added user ${user.id} to SSE streamer`)
-            }
-            
-            // Remove sensitive data from response
-            const { credential, tempToken, tokenExpiry, ...userResponse } = user
-            
-            return res.status(StatusCodes.OK).json( user )
-        } catch (error) {
-            next(error)
-        }
-    }
+}
 
-    public async forgotPassword(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data: ForgotPasswordDTO = req.body
-            await this.userService.forgotPassword(data)
-            
-            return res.status( StatusCodes.OK )
-        } catch (error) {
-            next(error)
-        }
+const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const data: ResetPasswordDTO = req.body
+        await userService.resetPassword(data)
+        
+        return res.status(StatusCodes.OK)
+    } catch (error) {
+        next(error)
     }
+}
 
-    public async resetPassword(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data: ResetPasswordDTO = req.body
-            await this.userService.resetPassword(data)
-            
-            return res.status(StatusCodes.OK)
-        } catch (error) {
-            next(error)
-        }
-    }
-
-    public async verifyUser(req: Request, res: Response, next: NextFunction) {
-        try {
-            const { token } = req.body
-            await this.userService.verifyUser(token)
-            
-            return res.status(StatusCodes.OK)
-        } catch (error) {
-            next(error)
-        }
-    }
-
-    public async getUserProfile(req: Request, res: Response, next: NextFunction) {
-        try {
-            const { id } = req.params
-            const user = await this.userService.getUserById(id)
-            
-            if (!user) {
-                return res.status(StatusCodes.NOT_FOUND).json({
-                    success: false,
-                    message: 'User not found'
-                })
-            }
-
-            // Remove sensitive data from response
-            const { credential, tempToken, tokenExpiry, ...userResponse } = user
-            
-            return res.status(StatusCodes.OK)
-        } catch (error) {
-            next(error)
-        }
-    }
+export default {
+    register,
+    forgotPassword,
+    resetPassword,
 }

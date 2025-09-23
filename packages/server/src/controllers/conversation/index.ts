@@ -1,10 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { ConversationServiceImpl } from '../../services/conversation';
+import conversationService from '../../services/conversation';
 import { InternalError } from '../../errors/internalError'
-import { AppDataSource } from '../../DataSource';
+import logger from '../../utils/logger'
 
-const conversationService = new ConversationServiceImpl(AppDataSource);
 
 const getUserConversations = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -38,6 +37,8 @@ const createDirectConversation = async (req: Request, res: Response, next: NextF
             throw new InternalError( StatusCodes.BAD_REQUEST, "Cannot create conversation with yourself." )
         }
 
+        logger.debug( currentUserId ) 
+        logger.debug( targetUserId ) 
         const conversation = await conversationService.createDirectConversation(currentUserId, targetUserId);
         
         return res.status(StatusCodes.CREATED).json({
@@ -78,9 +79,6 @@ const getConversationMessages = async (req: Request, res: Response, next: NextFu
             }
         });
     } catch (error) {
-        if (error.message === 'Access denied: You are not a member of this conversation') {
-            throw new InternalError(StatusCodes.FORBIDDEN, "Access denied: You are not a member of this conversation.")
-        }
         next(error)
     }
 }
@@ -88,5 +86,5 @@ const getConversationMessages = async (req: Request, res: Response, next: NextFu
 export default {
     getUserConversations,
     createDirectConversation,
-    getConversationMessages
+    getConversationMessages,
 }

@@ -1,13 +1,16 @@
 import {
     Entity,
-    PrimaryGeneratedColumn,
+    PrimaryColumn,
     Column,
     CreateDateColumn,
     UpdateDateColumn,
     DeleteDateColumn,
     Index,
     OneToMany,
+    OneToOne,
+    JoinColumn,
 } from 'typeorm';
+import { User as AuthUser } from '../../auth/database/entities/User'
 import { Conversation } from './Conversation';
 import { ConversationMember } from './ConversationMemeber';
 import { Message } from './Message';
@@ -16,11 +19,12 @@ import { UserPresence } from './UserPresence';
 
 @Entity('users', { schema: 'business' })
 export class User {
-    @PrimaryGeneratedColumn('uuid')
+    @PrimaryColumn('uuid')
     id: string;
 
-    @Column({ type: 'uuid', unique: true })
-    authUserId: string;
+    @OneToOne(() => AuthUser, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'id', referencedColumnName: 'id' })
+    authUser: AuthUser
 
     @Column({ length: 100 })
     displayName: string;

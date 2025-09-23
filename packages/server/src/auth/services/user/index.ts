@@ -124,12 +124,14 @@ export class UserService {
 
     // Database operations
     private async findUserByEmail(email: string, queryRunner: QueryRunner): Promise<AuthUser | null> {
-        this.validateUserEmail(email)
-        return await queryRunner.manager.findOneBy(AuthUser, { email })
-    }
+        const sql = `
+            SELECT *
+            FROM auth.users
+            WHERE email = $1
+        `
+        const result = await queryRunner.query( sql, [ email ] )
 
-    private async findUserByToken(token: string, queryRunner: QueryRunner): Promise<AuthUser | null> {
-        return await queryRunner.manager.findOneBy(AuthUser, { tempToken: token })
+        return result.length > 0 ? result[ 0 ] as AuthUser : null
     }
 
     // Main service methods
@@ -140,9 +142,11 @@ export class UserService {
         try {
             await queryRunner.startTransaction()
 
+            this.validateUserEmail( data.email )
+
             // Check if user already exists
-            const existingUser = await this.findUserByEmail(data.email, queryRunner)
-            if (existingUser) {
+            const existingUser = await this.findUserByEmail( data.email, queryRunner )
+            if ( existingUser ) {
                 throw new InternalError(StatusCodes.BAD_REQUEST, UserErrorMessage.USER_EMAIL_ALREADY_EXISTS)
             }
 
@@ -158,25 +162,22 @@ export class UserService {
             const expiryInHours = process.env.INVITE_TOKEN_EXPIRY_IN_HOURS ? parseInt(process.env.INVITE_TOKEN_EXPIRY_IN_HOURS) : 24
             tokenExpiry.setHours(tokenExpiry.getHours() + expiryInHours)
 
-            const newUser = queryRunner.manager.create(AuthUser, {
-                id: authUserId,
-                name: data.name,
-                email: data.email,
-                credential: hashedPassword,
-                tempToken,
-                tokenExpiry
-            })
+            const [ savedUser ] = await queryRunner.query(
+                `
+                    INSERT INTO auth.users (id, name, email, credential, "tempToken", "tokenExpiry")
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    RETURNING *
+                `,
+                [authUserId, data.name, data.email, hashedPassword, tempToken, tokenExpiry]
+            )
 
-            const savedUser = await queryRunner.manager.save(AuthUser, newUser)
-
-            // Create corresponding business user record
-            const businessUser = queryRunner.manager.create(BusinessUser, {
-                id: uuidv4(),
-                authUserId: authUserId,
-                displayName: data.name
-            })
-
-            await queryRunner.manager.save(BusinessUser, businessUser)
+            await queryRunner.query(
+                `
+                    INSERT INTO business.users (id, "displayName")
+                    VALUES ($1, $2)
+                `,
+                [ authUserId, data.name ]
+            )
 
             await queryRunner.commitTransaction()
 
@@ -336,33 +337,6 @@ export class UserService {
 
         try {
             return await this.findUserByEmail(email, queryRunner)
-        } finally {
-            await queryRunner.release()
-        }
-    }
-
-    public async verifyUser(token: string): Promise<void> {
-        const queryRunner = this.getDataSource().createQueryRunner()
-        await queryRunner.connect()
-
-        try {
-            await queryRunner.startTransaction()
-
-            const user = await this.findUserByToken(token, queryRunner)
-            if (!user) {
-                throw new InternalError(StatusCodes.NOT_FOUND, UserErrorMessage.USER_NOT_FOUND)
-            }
-
-            // Clear verification token
-            user.tempToken = undefined
-            user.tokenExpiry = undefined
-            await queryRunner.manager.save(AuthUser, user)
-
-            await queryRunner.commitTransaction()
-
-        } catch (error) {
-            await queryRunner.rollbackTransaction()
-            throw error
         } finally {
             await queryRunner.release()
         }

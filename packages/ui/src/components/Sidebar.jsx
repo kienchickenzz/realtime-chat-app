@@ -5,11 +5,25 @@ import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import { Users, Plus, MessageCircle } from "lucide-react";
 
 const Sidebar = () => {
-    const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
+    const { 
+        getUsers, 
+        users, 
+        selectedUser, 
+        setSelectedUser, 
+        isUsersLoading,
+        getConversations,
+        conversations,
+        isConversationsLoading,
+        createDirectConversation
+    } = useChatStore();
 
-    const { onlineUsers } = useAuthStore();
+    const { onlineUsers, authUser } = useAuthStore();
     const [showOnlineOnly, setShowOnlineOnly] = useState(false);
     const [showUsers, setShowUsers] = useState(false);
+
+    useEffect(() => {
+        getConversations();
+    }, [getConversations]);
 
     const handleToggleUsers = () => {
         const newShowUsers = !showUsers;
@@ -23,7 +37,33 @@ const Sidebar = () => {
         ? users.filter((user) => onlineUsers.includes(user._id))
         : users;
 
-    if (isUsersLoading) return <SidebarSkeleton />;
+    const handleUserClick = async (user) => {
+        try {
+            const conversation = await createDirectConversation(user.id);
+            setSelectedUser(conversation);
+            setShowUsers(false);
+        } catch (error) {
+            console.error("Failed to create conversation:", error);
+        }
+    };
+
+    const getConversationDisplayInfo = (conversation) => {
+        if (conversation.type === 'direct') {
+            const otherMember = conversation.members.find(member => member.user.id !== authUser.id);
+            return {
+                name: otherMember?.user.displayName || otherMember?.user.username || 'Unknown User',
+                avatar: otherMember?.user.profilePic || '/avatar.png',
+                isOnline: onlineUsers.includes(otherMember?.user.id)
+            };
+        }
+        return {
+            name: conversation.name || 'Group Chat',
+            avatar: conversation.avatarUrl || '/avatar.png',
+            isOnline: false
+        };
+    };
+
+    if (isUsersLoading || isConversationsLoading) return <SidebarSkeleton />;
 
     return (
         <aside className="h-full w-20 lg:w-72 border-r border-base-300 flex flex-col transition-all duration-200">
@@ -58,14 +98,57 @@ const Sidebar = () => {
             </div>
 
             <div className="overflow-y-auto w-full py-3">
+                {/* Conversations List */}
+                {!showUsers && conversations.map((conversation) => {
+                    const displayInfo = getConversationDisplayInfo(conversation);
+                    return (
+                        <button
+                            key={conversation.id}
+                            onClick={() => setSelectedUser(conversation)}
+                            className={`
+                                w-full p-3 flex items-center gap-3
+                                hover:bg-base-300 transition-colors
+                                ${selectedUser?.id === conversation.id ? "bg-base-300 ring-1 ring-base-300" : ""}
+                            `}
+                        >
+                            <div className="relative mx-auto lg:mx-0">
+                                <img
+                                    src={displayInfo.avatar}
+                                    alt={displayInfo.name}
+                                    className="size-12 object-cover rounded-full"
+                                />
+                                {displayInfo.isOnline && (
+                                    <span
+                                        className="absolute bottom-0 right-0 size-3 bg-green-500 
+                                        rounded-full ring-2 ring-zinc-900"
+                                    />
+                                )}
+                            </div>
+
+                            {/* Conversation info - only visible on larger screens */}
+                            <div className="hidden lg:block text-left min-w-0">
+                                <div className="font-medium truncate">
+                                    {displayInfo.name}
+                                </div>
+                                <div className="text-sm text-zinc-400">
+                                    {conversation.type === 'direct' ? 
+                                        (displayInfo.isOnline ? "Online" : "Offline") : 
+                                        `${conversation.members?.length || 0} members`
+                                    }
+                                </div>
+                            </div>
+                        </button>
+                    );
+                })}
+
+                {/* Users List */}
                 {showUsers && filteredUsers.map((user) => (
                     <button
                         key={user.id}
-                        onClick={() => setSelectedUser(user)}
+                        onClick={() => handleUserClick(user)}
                         className={`
                             w-full p-3 flex items-center gap-3
                             hover:bg-base-300 transition-colors
-                            ${selectedUser?._id === user._id ? "bg-base-300 ring-1 ring-base-300" : ""}
                         `}
                     >
                         <div className="relative mx-auto lg:mx-0">
@@ -98,12 +181,13 @@ const Sidebar = () => {
                     <div className="text-center text-zinc-500 py-4">No online users</div>
                 )}
                 
-                {!showUsers && (
+                {!showUsers && conversations.length === 0 && (
                     <div className="text-center text-zinc-500 py-8">
                         <div className="mb-2">
-                            <Users className="size-12 mx-auto opacity-50" />
+                            <MessageCircle className="size-12 mx-auto opacity-50" />
                         </div>
-                        <p className="text-sm">Click the + button to view contacts</p>
+                        <p className="text-sm">No conversations yet</p>
+                        <p className="text-xs mt-1">Click the + button to start chatting</p>
                     </div>
                 )}
             </div>

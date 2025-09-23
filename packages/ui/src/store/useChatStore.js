@@ -7,8 +7,11 @@ export const useChatStore = create((set, get) => ({
     messages: [],
     users: [],
     selectedUser: null,
+    conversations: [],
+    pagination: null,
     isUsersLoading: false,
     isMessagesLoading: false,
+    isConversationsLoading: false,
     messageHandler: null,
 
     getUsers: async () => {
@@ -30,6 +33,53 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
+    getConversations: async () => {
+        set({ isConversationsLoading: true });
+        try {
+            const res = await axiosInstance.get("/conversation");
+            set({ conversations: res.data.conversations || [] });
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to load conversations");
+        } finally {
+            set({ isConversationsLoading: false });
+        }
+    },
+
+    createDirectConversation: async (targetUserId) => {
+        try {
+            const res = await axiosInstance.post("/conversation/direct", { 
+                targetUserId
+            });
+            
+            const newConversation = res.data.conversation;
+            const { conversations } = get();
+            
+            // Check if conversation already exists in local state
+            const existingIndex = conversations.findIndex(conv => conv.id === newConversation.id);
+            
+            if (existingIndex !== -1) {
+                // Update existing conversation with full data
+                const updatedConversations = [...conversations];
+                updatedConversations[existingIndex] = newConversation;
+                set({ conversations: updatedConversations, selectedUser: newConversation });
+            } else {
+                // Add new conversation to the list
+                set({ 
+                    conversations: [newConversation, ...conversations],
+                    selectedUser: newConversation
+                });
+            }
+            
+            // Load messages for this conversation
+            await get().getConversationMessages(newConversation.id);
+            
+            return newConversation;
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to create conversation");
+            throw error;
+        }
+    },
+
     getMessages: async (userId) => {
         set({ isMessagesLoading: true });
         try {
@@ -42,13 +92,57 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
+    getConversationMessages: async (conversationId, page = 1, limit = 50) => {
+        set({ isMessagesLoading: true });
+        try {
+            const res = await axiosInstance.get(`/conversation/${conversationId}/messages`, {
+                params: { page, limit }
+            });
+            
+            set({ 
+                messages: res.data.messages || [],
+                pagination: res.data.pagination || null
+            });
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to load messages");
+            set({ messages: [] });
+        } finally {
+            set({ isMessagesLoading: false });
+        }
+    },
+
     sendMessage: async (messageData) => {
         const { selectedUser, messages } = get();
+        
+        if (!selectedUser?.id) {
+            toast.error("No conversation selected");
+            return;
+        }
+
         try {
-            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
-            set({ messages: [...messages, res.data] });
+            // Prepare message payload for new endpoint
+            const payload = {
+                conversationId: selectedUser.id,
+                content: messageData.text,
+                messageType: messageData.image ? 'image' : 'text'
+            };
+
+            // If there's an image, we'll need to handle file upload differently
+            // For now, let's handle text messages
+            if (messageData.image) {
+                // TODO: Implement image upload logic
+                toast.error("Image messages not yet implemented");
+                return;
+            }
+
+            const res = await axiosInstance.post('/message', payload);
+            
+            // Add the new message to local state
+            set({ messages: [...messages, res.data.message] });
+            
         } catch (error) {
-            toast.error(error.response.data.message);
+            toast.error(error.response?.data?.message || "Failed to send message");
+            throw error;
         }
     },
 
@@ -58,8 +152,12 @@ export const useChatStore = create((set, get) => ({
 
         const handleNewMessage = (event) => {
             const newMessage = event.detail;
-            const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
-            if (!isMessageSentFromSelectedUser) return;
+            // For conversation-based messages, check if message belongs to current conversation
+            const isMessageFromCurrentConversation = selectedUser.id && 
+                (newMessage.conversationId === selectedUser.id || 
+                 newMessage.senderId === selectedUser._id);
+            
+            if (!isMessageFromCurrentConversation) return;
 
             set({
                 messages: [...get().messages, newMessage],

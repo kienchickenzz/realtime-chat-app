@@ -20,6 +20,8 @@ import { LoggedInUser } from './auth/Interface'
 // import { OpenTelemetry } from './metrics/OpenTelemetry'
 import { QueueManager } from './queue/QueueManager'
 import { RedisEventSubscriber } from './pubsub/RedisEventSubscriber'
+import { RedisEventPublisher } from './pubsub/RedisEventPublisher'
+import { DatabaseListener } from './utils/DatabaseListener'
 import 'global-agent/bootstrap'
 
 declare global {
@@ -52,7 +54,9 @@ export class App {
     // identityManager: IdentityManager
     // metricsProvider: IMetricsProvider
     queueManager: QueueManager
-    redisSubscriber: RedisEventSubscriber
+    redisEventSubscriber: RedisEventSubscriber
+    redisEventPublisher: RedisEventPublisher
+    databaseListener: DatabaseListener
 
     constructor() {
         this.app = express()
@@ -80,17 +84,28 @@ export class App {
             this.sseStreamer = new SSEStreamer()
             logger.info('🌊 [server]: SSE Streamer initialized successfully')
             
+            // Initialize Redis Publisher
+            this.redisEventPublisher = new RedisEventPublisher()
+            await this.redisEventPublisher.connect()
+            logger.info('📤 [server]: Redis event publisher connected successfully')
+            
             // Init Queues
             this.queueManager = QueueManager.getInstance()
             this.queueManager.setupAllQueues({
                 appDataSource: this.AppDataSource,
                 sseStreamer: this.sseStreamer,
+                redisEventPublisher: this.redisEventPublisher,
             })
             logger.info('✅ [Queue]: All queues setup successfully')
 
-            this.redisSubscriber = new RedisEventSubscriber(this.sseStreamer)
-            await this.redisSubscriber.connect()
+            this.redisEventSubscriber = new RedisEventSubscriber(this.sseStreamer)
+            await this.redisEventSubscriber.connect()
             logger.info('🔗 [server]: Redis event subscriber connected successfully')
+
+            // Initialize Database Listener for PostgreSQL notifications
+            this.databaseListener = new DatabaseListener()
+            await this.databaseListener.start()
+            logger.info('📡 [server]: Database listener started successfully')
 
             logger.info('🎉 [server]: All initialization steps completed successfully!')
         } catch (error) {
@@ -219,8 +234,16 @@ export class App {
     async stopApp() {
         try {
             const removePromises: any[] = []
-            removePromises.push( this.redisSubscriber.disconnect() )
+
+            removePromises.push( this.redisEventSubscriber.disconnect() )
+            removePromises.push( this.redisEventPublisher.disconnect() )
+            
+            if (this.databaseListener) {
+                removePromises.push( this.databaseListener.stop() )
+            }
+            
             await Promise.all(removePromises)
+            logger.info('🛑 [server]: All services stopped successfully')
         } catch (e) {
             logger.error(`❌[server]: Server shut down error: ${e}`)
         }

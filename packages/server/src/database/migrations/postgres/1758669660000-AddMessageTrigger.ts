@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner } from "typeorm"
   
 export class AddMessageTrigger1758669660000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
-        // Tạo function trigger
+
         await queryRunner.query(`
             CREATE OR REPLACE FUNCTION notify_new_message()
             RETURNS TRIGGER AS $$
@@ -10,7 +10,8 @@ export class AddMessageTrigger1758669660000 implements MigrationInterface {
                 -- Publish message event to Redis
                 PERFORM pg_notify('new_message', 
                     json_build_object(
-                        'messageId', NEW.id
+                        'messageId', NEW.id,
+                        'senderId', NEW."senderId"
                     )::text
                 );
                 RETURN NEW;
@@ -18,7 +19,6 @@ export class AddMessageTrigger1758669660000 implements MigrationInterface {
             $$ LANGUAGE plpgsql;
         `);
 
-        // Tạo trigger
         await queryRunner.query(`
             CREATE TRIGGER message_insert_trigger
             AFTER INSERT ON business.messages

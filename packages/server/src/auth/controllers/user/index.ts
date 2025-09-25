@@ -39,8 +39,35 @@ const resetPassword = async (req: Request, res: Response, next: NextFunction) =>
     }
 }
 
+
+const logout = async ( req: Request, res: Response, next: NextFunction ) => {
+    try {
+        if ( !req.user ) {
+            return res.status( 200 ).json( { message: 'Already logged out', redirectTo: '/login' } )
+        }
+
+        if ( req.isAuthenticated() ) { // Nếu dùng Passport session
+            req.logout( ( err ) => {
+                if ( err ) return next( err )
+
+                req.session.destroy( ( err ) => {
+                    if ( err ) {
+                        return res.status( 500 ).json( { message: 'Failed to destroy session' } )
+                    }
+
+                    res.clearCookie( 'connect.sid' )
+                    return res.status( 200 ).json( { message: 'Logged out', redirectTo: '/login' })
+                } )
+            } )
+        }
+    } catch ( error ) {
+        next( error )
+    }
+}
+
 export default {
     register,
     forgotPassword,
     resetPassword,
+    logout,
 }

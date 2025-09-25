@@ -1,6 +1,8 @@
 import { BaseQueue } from './BaseQueue'
 import { UpdateStatusQueue } from './UpdateStatusQueue'
 import { UpdateMessageQueue } from './UpdateMessageQueue'
+import { MessageEventQueue } from './MessageEventQueue'
+import { RedisEventPublisher } from '../pubsub/RedisEventPublisher'
 import { SSEStreamer } from '../sse/SSEStreamer'
 // import { Telemetry } from '../utils/telemetry'
 import { DataSource } from 'typeorm'
@@ -11,7 +13,7 @@ import { Express } from 'express'
 
 const QUEUE_NAME = process.env.QUEUE_NAME || 'chatapp-queue'
 
-type QUEUE_TYPE = 'updateStatus' | 'updateMessage'
+type QUEUE_TYPE = 'updateStatus' | 'updateMessage' | 'messageEvent'
 
 export class QueueManager {
     private static instance: QueueManager
@@ -72,10 +74,12 @@ export class QueueManager {
         // telemetry,
         appDataSource,
         sseStreamer,
+        redisEventPublisher,
     }: {
         // telemetry: Telemetry
         appDataSource: DataSource,
-        sseStreamer: SSEStreamer
+        sseStreamer: SSEStreamer,
+        redisEventPublisher: RedisEventPublisher
     } ) {
         const updateStatusQueueName = `${ QUEUE_NAME }-updateStatus`
         const updateStatusQueue = new UpdateStatusQueue( updateStatusQueueName, this.connection, {
@@ -93,9 +97,17 @@ export class QueueManager {
         } )
         this.registerQueue( 'updateMessage', updateMessageQueue )
 
+        const messageEventQueueName = `${ QUEUE_NAME }-messageEvent`
+        const messageEventQueue = new MessageEventQueue( messageEventQueueName, this.connection, { 
+            redisEventPublisher: redisEventPublisher,
+            appDataSource: appDataSource
+        } )
+        this.registerQueue( 'messageEvent', messageEventQueue )
+
         const bullboard = createBullBoard( [
             new BullMQAdapter( updateStatusQueue.getQueue() ), 
-            new BullMQAdapter( updateMessageQueue.getQueue() ), 
+            new BullMQAdapter( updateMessageQueue.getQueue() ),
+            new BullMQAdapter( messageEventQueue.getQueue() ), 
         ] )
         this.bullBoardRouter = bullboard.router
     }

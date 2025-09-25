@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import { StatusCodes } from 'http-status-codes'
 import moment from 'moment'
 import { DataSource, QueryRunner } from 'typeorm'
+import { Request, Response, NextFunction } from 'express'
 import { InternalError } from '../../../errors/internalError'
 import { getRunningExpressApp } from '../../../utils/getRunningExpressApp'
 import { RedisEventPublisher } from '../../../pubsub/RedisEventPublisher'
@@ -215,7 +216,7 @@ export class UserService {
 
             // Subscribe user to their channel for receiving notifications
             const appServer = getRunningExpressApp()
-            appServer.redisSubscriber.subscribe(user.id)
+            appServer.redisEventSubscriber.subscribe(user.id)
             logger.debug(`Subscribed user ${user.id} to their notification channel`)
 
             // Trigger user sign-in activity update
@@ -313,30 +314,6 @@ export class UserService {
         } catch (error) {
             await queryRunner.rollbackTransaction()
             throw error
-        } finally {
-            await queryRunner.release()
-        }
-    }
-
-    // Additional utility methods
-    public async getUserById(id: string): Promise<AuthUser | null> {
-        const queryRunner = this.getDataSource().createQueryRunner()
-        await queryRunner.connect()
-
-        try {
-            this.validateUserId(id)
-            return await queryRunner.manager.findOneBy(AuthUser, { id })
-        } finally {
-            await queryRunner.release()
-        }
-    }
-
-    public async getUserByEmail(email: string): Promise<AuthUser | null> {
-        const queryRunner = this.getDataSource().createQueryRunner()
-        await queryRunner.connect()
-
-        try {
-            return await this.findUserByEmail(email, queryRunner)
         } finally {
             await queryRunner.release()
         }

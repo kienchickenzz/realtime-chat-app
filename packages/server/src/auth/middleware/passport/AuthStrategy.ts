@@ -44,6 +44,10 @@ export const getAuthStrategy = (options: any): Strategy => {
         })}`)
 
         try {
+            if (!req.user) {
+                return done(null, false, 'Unauthorized.')
+            }
+            
             const meta = decryptToken(payload.meta)
             logger.debug(`[AUTH] jwtVerify - Decrypted meta: ${JSON.stringify({
                 meta: meta,
@@ -72,7 +76,7 @@ export const getAuthStrategy = (options: any): Strategy => {
             const user = {
                 id: payload.id,
                 name: payload.username,
-                email: null // Will be filled from DB if needed
+                email: null // TODO: Will be filled from DB if needed
             }
             
             logger.debug(`[AUTH] jwtVerify - JWT verification successful: ${JSON.stringify({

@@ -60,10 +60,21 @@ export class SSEStreamer {
     }
 
     streamSignOut( channelId: string, data: any ) {
-        const client = this.clients[channelId]
+        const client = this.clients[ channelId ]
         if (client) {
             const clientResponse = {
                 event: 'someone_sign_out',
+                data: data
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
+    }
+
+    streamMessageEvent( channelId: string, data: any ) {
+        const client = this.clients[ channelId ]
+        if (client) {
+            const clientResponse = {
+                event: 'new_message',
                 data: data
             }
             client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')

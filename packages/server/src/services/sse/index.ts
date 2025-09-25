@@ -11,7 +11,7 @@ const connectSSE = async(userId: string, res: Response) => {
         logger.debug(`Added user ${userId} to SSE streamer`)
 
         // Subscribe to Redis channels for this user
-        appServer.redisSubscriber.subscribe(userId)
+        appServer.redisEventSubscriber.subscribe(userId)
         logger.debug(`Subscribed user ${userId} to channel ${userId}`)
 
         return true

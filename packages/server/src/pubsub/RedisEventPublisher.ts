@@ -96,4 +96,19 @@ export class RedisEventPublisher {
             console.error('Error streaming start event:', error)
         }
     }
+
+    async publishNewMessageEvent( userId: string, data: any ) {
+        try {
+            await this.redisPublisher.publish(
+                userId,
+                JSON.stringify({
+                    userId,
+                    eventType: 'new_message',
+                    data: data
+                })
+            )
+        } catch (error) {
+            logger.error('Error publishing new message event:', error)
+        }
+    }
 }

@@ -1,0 +1,68 @@
+{
+  "info": {
+    "name": "Express Passport Redis Demo",
+    "_postman_id": "e9fdb780-8c2f-11ef-bb7f-6b65af1b0b9e",
+    "description": "Test express-session + passport + redis integration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login (John)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "username", "value": "john", "type": "text" },
+            { "key": "password", "value": "123456", "type": "text" }
+          ]
+        },
+        "url": { "raw": "http://localhost:3000/login", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["login"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Check Session",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "http://localhost:3000/check-session", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["check-session"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "http://localhost:3000/profile", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["profile"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "http://localhost:3000/logout", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["logout"] }
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": { "type": "text/javascript", "exec": [] }
+    },
+    {
+      "listen": "test",
+      "script": { "type": "text/javascript", "exec": [] }
+    }
+  ]
+}

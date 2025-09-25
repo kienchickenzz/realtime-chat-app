@@ -3,13 +3,13 @@ import { SSEStreamer } from '../sse/SSEStreamer'
 import logger from '../utils/logger'
 
 export class RedisEventSubscriber {
-    private redisSubscriber: ReturnType<typeof createClient>
+    private redisEventSubscriber: ReturnType<typeof createClient>
     private sseStreamer: SSEStreamer
     private subscribedChannels: Set<string> = new Set()
 
     constructor(sseStreamer: SSEStreamer) {
         if (process.env.REDIS_URL) {
-            this.redisSubscriber = createClient({
+            this.redisEventSubscriber = createClient({
                 url: process.env.REDIS_URL,
                 socket: {
                     keepAlive:
@@ -23,7 +23,7 @@ export class RedisEventSubscriber {
                         : undefined
             })
         } else {
-            this.redisSubscriber = createClient({
+            this.redisEventSubscriber = createClient({
                 username: process.env.REDIS_USERNAME || undefined,
                 password: process.env.REDIS_PASSWORD || undefined,
                 socket: {
@@ -48,18 +48,18 @@ export class RedisEventSubscriber {
     }
 
     async connect() {
-        await this.redisSubscriber.connect()
+        await this.redisEventSubscriber.connect()
     }
 
     async disconnect() {
-        if (this.redisSubscriber) {
-            await this.redisSubscriber.quit()
+        if (this.redisEventSubscriber) {
+            await this.redisEventSubscriber.quit()
         }
     }
 
     subscribe(channel: string) {
         // Subscribe to the Redis channel for job events
-        if (!this.redisSubscriber) {
+        if (!this.redisEventSubscriber) {
             throw new Error('Redis subscriber not connected.')
         }
 
@@ -68,7 +68,7 @@ export class RedisEventSubscriber {
             return // Prevent duplicate subscription
         }
 
-        this.redisSubscriber.subscribe(channel, (message) => {
+        this.redisEventSubscriber.subscribe(channel, (message) => {
             this.handleEvent(message)
         })
 
@@ -95,6 +95,11 @@ export class RedisEventSubscriber {
             case 'someone_sign_out':
                 // Stream sign-out event to current user's SSE connection
                 this.sseStreamer.streamSignOut( userId, data )
+                break
+
+            case 'new_message':
+                // Stream sign-out event to current user's SSE connection
+                this.sseStreamer.streamMessageEvent( userId, data )
                 break
             
             default:

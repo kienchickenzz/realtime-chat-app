@@ -21,6 +21,8 @@
         "@bull-board/express": "^6.12.7",
         "@oclif/core": "^3",
         "@types/cookie-parser": "^1.4.9",
+        "@types/passport-local": "^1.0.38",
+        "@types/pg": "^8.15.5",
         "axios": "^1.11.0",
         "bcryptjs": "^2.4.3",
         "bull-board": "^2.1.3",

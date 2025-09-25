@@ -18,8 +18,9 @@ import { RedisEventPublisher } from '../../../pubsub/RedisEventPublisher'
 import logger from '../../../utils/logger'
 import { User as AuthUser } from '../../database/entities/User'
 import { Not } from 'typeorm'
+import { Strategy as LocalStrategy, IStrategyOptions, VerifyFunction } from 'passport-local'
 
-const localStrategy = require('passport-local').Strategy
+const localStrategy = LocalStrategy
 
 const jwtAudience = process.env.JWT_AUDIENCE || 'AUDIENCE'
 const jwtIssuer = process.env.JWT_ISSUER || 'ISSUER'
@@ -117,48 +118,52 @@ const _initializePassportMiddleware = async (app: express.Application) => {
     })
 }
 
+const localStrategyOptions: IStrategyOptions = {
+    usernameField: 'email',
+    passwordField: 'password',
+    session: true,
+    passReqToCallback: false  // Nếu true, callback sẽ là (req, email, password, done)
+}
+
+// FIXME: Refactor this strategy into a new file
+const verifyCallback: VerifyFunction = async (
+    email: string,           // username/email
+    password: string,        // password
+    done: (error: any, user?: any, info?: any) => void
+) => {
+    let queryRunner
+    try {
+        queryRunner = getRunningExpressApp().AppDataSource.createQueryRunner()
+        await queryRunner.connect()
+        const userService = new UserService()
+        const body: any = {
+            email: email,
+            password: password
+        }
+
+        // FIXME: Triển khai service ở đây có hợp lí không hay nên triển khai 1 hàm utils truy vấn vào db...
+        // (bỏ controller đi!)
+        const response = await userService.login(body)
+        const loggedInUser: LoggedInUser = {
+            id: response.id,
+            email: response.email,
+            name: response.name
+        }
+
+        return done( null, loggedInUser )
+    } catch (error) {
+        return done(error)
+    } finally {
+        if (queryRunner) await queryRunner.release()
+    }
+}
+
 export const initializeJwtCookieMiddleware = async (app: express.Application) => {
     await _initializePassportMiddleware(app)
 
-    const strategy = getAuthStrategy(jwtOptions)
-    passport.use(strategy)
-    passport.use(
-        'login',
-        new localStrategy(
-            {
-                usernameField: 'email',
-                passwordField: 'password',
-                session: true
-            },
-            async (email: string, password: string, done: VerifiedCallback) => {
-                let queryRunner
-                try {
-                    queryRunner = getRunningExpressApp().AppDataSource.createQueryRunner()
-                    await queryRunner.connect()
-                    const userService = new UserService()
-                    const body: any = {
-                        email: email,
-                        password: password
-                    }
-
-                    // FIXME: Triển khai service ở đây có hợp lí không hay nên triển khai 1 hàm utils truy vấn vào db...
-                    // (bỏ controller đi!)
-                    const response = await userService.login(body)
-                    const loggedInUser: LoggedInUser = {
-                        id: response.id,
-                        email: response.email,
-                        name: response.name
-                    }
-
-                    return done( null, loggedInUser )
-                } catch (error) {
-                    return done(error)
-                } finally {
-                    if (queryRunner) await queryRunner.release()
-                }
-            }
-        )
-    )
+    const jwtStrategy = getAuthStrategy( jwtOptions )
+    passport.use( jwtStrategy )
+    passport.use( 'login', new localStrategy( localStrategyOptions, verifyCallback ) )
 
     // Routing resolver
     app.post( '/api/auth/resolve', async (req, res) => {
@@ -247,37 +252,37 @@ export const setTokenOrCookies = (
     const returnUser = generateSafeCopy(user)
     returnUser.isSSO = !isSSO ? false : isSSO
 
-    if (redirect) {
-        // Send user data as part of the redirect URL (using query parameters)
-        const dashboardUrl = `/sso-success?user=${encodeURIComponent(JSON.stringify(returnUser))}`
-        // Return the token as a cookie in our response.
-        let resWithCookies = res
-            .cookie('token', token, {
-                httpOnly: true,
-                secure: secureCookie,
-                sameSite: 'lax'
-            })
-            .cookie('refreshToken', refreshToken, {
-                httpOnly: true,
-                secure: secureCookie,
-                sameSite: 'lax'
-            })
-        resWithCookies.redirect(dashboardUrl)
-    } else {
-        // Return the token as a cookie in our response.
-        res.cookie('token', token, {
+    // if (redirect) {
+    //     // Send user data as part of the redirect URL (using query parameters)
+    //     const dashboardUrl = `/sso-success?user=${encodeURIComponent(JSON.stringify(returnUser))}`
+    //     // Return the token as a cookie in our response.
+    //     let resWithCookies = res
+    //         .cookie('token', token, {
+    //             httpOnly: true,
+    //             secure: secureCookie,
+    //             sameSite: 'lax'
+    //         })
+    //         .cookie('refreshToken', refreshToken, {
+    //             httpOnly: true,
+    //             secure: secureCookie,
+    //             sameSite: 'lax'
+    //         })
+    //     resWithCookies.redirect(dashboardUrl)
+    // } else {
+    // Return the token as a cookie in our response.
+    res.cookie('token', token, {
+        httpOnly: true,
+        secure: secureCookie,
+        sameSite: 'lax'
+    })
+        .cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: secureCookie,
             sameSite: 'lax'
         })
-            .cookie('refreshToken', refreshToken, {
-                httpOnly: true,
-                secure: secureCookie,
-                sameSite: 'lax'
-            })
-            .type('json')
-            .send({ ...returnUser })
-    }
+        .type('json')
+        .send({ ...returnUser })
+    // }
 }
 
 const _generateJwtAuthToken = (user: LoggedInUser) => {
@@ -338,6 +343,7 @@ const _generateJwtToken = (user: LoggedInUser, expiryInMinutes: number, secret: 
     return sign({ id: user.id, username: user.name, meta: encryptedUserInfo }, secret!, options )
 }
 
+// FIXME: Move this function to utils
 const publishUserSignInEvent = async (userId: string, userName: string): Promise<void> => {
     try {
         const appServer = getRunningExpressApp()
@@ -411,7 +417,8 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
         // @ts-ignore
         if (info && info.name === 'TokenExpiredError') {
             logger.debug('[AUTH] verifyToken - JWT token expired')
-            if (req.cookies && req.cookies.refreshToken) {
+            if (req.cookies && req.cookies.refreshToken) { 
+                // Thông báo cho client biết cần refresh token
                 return res.status(401).json({ message: ErrorMessage.TOKEN_EXPIRED, retry: true })
             }
             return res.status(401).json({ message: ErrorMessage.INVALID_MISSING_TOKEN })
@@ -428,7 +435,7 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
             userName: user.name
         })}`)
 
-        req.user = user // Add user to request object for subsequent middleware
+        // req.user = user // Add user to request object for subsequent middleware
         next()
     })(req, res, next)
 }

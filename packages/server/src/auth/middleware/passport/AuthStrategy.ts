@@ -3,6 +3,8 @@ import { decryptToken } from '../../utils/tempTokenUtils'
 import { Strategy } from 'passport'
 import { Request } from 'express'
 import logger from '../../../utils/logger'
+import { getLoggedInUser } from '../../utils'
+import { LoggedInUser } from '../../Interface'
 
 interface ICommonObject {
     [key: string]: any
@@ -71,17 +73,13 @@ export const getAuthStrategy = (options: any): Strategy => {
                 return done(null, false, 'Unauthorized.')
             }
             
-            // TODO: Create a proper user object HERE
-            // Create user object from JWT payload
-            const user = {
-                id: payload.id,
-                name: payload.username,
-                email: null // TODO: Will be filled from DB if needed
-            }
+            // Get complete user info with role and permissions from database
+            const user: LoggedInUser = await getLoggedInUser(payload.id)
             
             logger.debug(`[AUTH] jwtVerify - JWT verification successful: ${JSON.stringify({
                 userId: user.id,
-                userName: user.name
+                userName: user.name,
+                role: user.role
             })}`)
             
             done(null, user)

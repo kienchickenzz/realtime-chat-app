@@ -1,28 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-
-// material-ui
 import { Alert, Box, Stack, Typography, useTheme } from '@mui/material'
+import { IconCircleCheck, IconExclamationCircle } from '@tabler/icons-react'
 
-// project imports
 import { StyledButton } from '@/components/button/StyledButton'
 import MainCard from '@/components/cards/MainCard'
 import { Input } from '@/components/input/Input'
 import { BackdropLoader } from '@/components/loading/BackdropLoader'
 
-// API
 import accountApi from '@/api/account.api'
-
-// Hooks
 import useApi from '@/hooks/useApi'
-
-// utils
 import useNotifier from '@/utils/useNotifier'
-
-// Icons
-import { IconCircleCheck, IconExclamationCircle } from '@tabler/icons-react'
-
-// ==============================|| ForgotPasswordPage ||============================== //
 
 const ForgotPasswordPage = () => {
     const theme = useTheme()
@@ -99,7 +87,6 @@ const ForgotPasswordPage = () => {
                             <Link style={{ color: theme.palette.primary.main }} to='/reset-password'>
                                 Change your password here
                             </Link>
-                            .
                         </Typography>
                     </Stack>
                     <form onSubmit={sendResetRequest}>

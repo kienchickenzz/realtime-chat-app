@@ -6,11 +6,13 @@ import { StatusCodes } from 'http-status-codes'
 import jwt, { JwtPayload, sign, SignOptions } from 'jsonwebtoken'
 import passport from 'passport'
 import { VerifiedCallback } from 'passport-jwt'
-import { InternalError } from '../../../errors/internalError'
 // import { IdentityManager } from '../../../IdentityManager'
 import { getRunningExpressApp } from '../../../utils/getRunningExpressApp'
 import { ErrorMessage, LoggedInUser } from '../../Interface'
+import { getLoggedInUser } from '../../utils'
+
 import { UserService } from '../../services/user'
+import userService from '../../services/user'
 import { decryptToken, encryptToken, generateSafeCopy } from '../../utils/tempTokenUtils'
 import { getAuthStrategy } from './AuthStrategy'
 import { initializeRedisClientAndStore } from './SessionPersistance'
@@ -131,30 +133,21 @@ const verifyCallback: VerifyFunction = async (
     password: string,        // password
     done: (error: any, user?: any, info?: any) => void
 ) => {
-    let queryRunner
     try {
-        queryRunner = getRunningExpressApp().AppDataSource.createQueryRunner()
-        await queryRunner.connect()
-        const userService = new UserService()
+        const userServiceInstance = new UserService()
         const body: any = {
             email: email,
             password: password
         }
 
-        // FIXME: Triển khai service ở đây có hợp lí không hay nên triển khai 1 hàm utils truy vấn vào db...
-        // (bỏ controller đi!)
-        const response = await userService.login(body)
-        const loggedInUser: LoggedInUser = {
-            id: response.id,
-            email: response.email,
-            name: response.name
-        }
+        const response = await userServiceInstance.login(body)
+        
+        // Get user info from database
+        const loggedInUser: LoggedInUser = await getLoggedInUser(response.id)
 
         return done( null, loggedInUser )
-    } catch (error) {
-        return done(error)
-    } finally {
-        if (queryRunner) await queryRunner.release()
+    } catch ( error ) {
+        return done( error )
     }
 }
 

@@ -18,11 +18,8 @@ const removeCurrentUser = () => {
 
 const _removeFromStorage = () => {
     localStorage.removeItem('isAuthenticated')
-    localStorage.removeItem('isGlobal')
     localStorage.removeItem('user')
     localStorage.removeItem('permissions')
-    localStorage.removeItem('features')
-    localStorage.removeItem('isSSO')
 }
 
 const clearAllCookies = () => {

@@ -1,6 +1,6 @@
 import * as PropTypes from 'prop-types'
 import { useAuth } from '@/hooks/useAuth'
-import { StyledButton, StyledToggleButton } from '@/ui-component/button/StyledButton'
+import { StyledButton, StyledToggleButton } from '@/components/button/StyledButton'
 import { Button, IconButton, ListItemButton, MenuItem, Tab } from '@mui/material'
 
 export const StyledPermissionButton = ({ permissionId, display, ...props }) => {

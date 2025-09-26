@@ -5,9 +5,7 @@ import AuthLayout from '@/layout/AuthLayout'
 
 const ResolveLoginPage = Loadable(lazy(() => import('@/views/auth/login')))
 const SignInPage = Loadable(lazy(() => import('@/views/auth/signIn')))
-const RegisterPage = Loadable(lazy(() => import('@/views/auth/register')))
-const LoginPage = Loadable(lazy(() => import('@/pages/LoginPage')))
-const SignUpPage = Loadable(lazy(() => import('@/pages/SignUpPage')))
+const SignUpPage = Loadable(lazy(() => import('@/views/auth/signUp')))
 const ForgotPasswordPage = Loadable(lazy(() => import('@/views/auth/forgotPassword')))
 const ResetPasswordPage = Loadable(lazy(() => import('@/views/auth/resetPassword')))
 const UnauthorizedPage = Loadable(lazy(() => import('@/views/auth/unauthorized')))
@@ -26,7 +24,7 @@ const AuthRoutes = {
         },
         {
             path: '/register',
-            element: <RegisterPage />
+            element: <SignUpPage />
         },
         {
             path: '/signup',

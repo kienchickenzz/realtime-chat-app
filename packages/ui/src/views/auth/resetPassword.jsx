@@ -22,8 +22,6 @@ import { validatePassword } from '@/utils/validation'
 // Icons
 import { IconExclamationCircle, IconX } from '@tabler/icons-react'
 
-// ==============================|| ResetPasswordPage ||============================== //
-
 const ResetPasswordPage = () => {
     const theme = useTheme()
     useNotifier()
@@ -161,7 +159,6 @@ const ResetPasswordPage = () => {
                             <Link style={{ color: theme.palette.primary.main }} to='/signin'>
                                 Back to Login
                             </Link>
-                            .
                         </Typography>
                     </Stack>
                     <form onSubmit={validateAndSubmit}>

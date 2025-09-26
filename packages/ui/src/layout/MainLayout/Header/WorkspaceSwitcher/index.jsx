@@ -28,7 +28,6 @@ import accountApi from '@/api/account.api'
 
 // hooks
 import useApi from '@/hooks/useApi'
-import { useConfig } from '@/store/context/ConfigContext'
 
 // store
 import { store } from '@/store'
@@ -78,8 +77,6 @@ const WorkspaceSwitcher = () => {
     const user = useSelector((state) => state.auth.user)
     const isAuthenticated = useSelector((state) => state.auth.isAuthenticated)
     const features = useSelector((state) => state.auth.features)
-
-    const { isEnterpriseLicensed } = useConfig()
 
     const [anchorEl, setAnchorEl] = useState(null)
     const open = Boolean(anchorEl)

@@ -9,7 +9,6 @@ import { useTheme } from '@mui/material/styles'
 
 // project imports
 import useNotifier from '@/utils/useNotifier'
-import { useConfig } from '@/store/context/ConfigContext'
 
 // API
 import { logoutSuccess } from '@/store/reducers/authSlice'
@@ -31,7 +30,6 @@ const CloudMenuList = () => {
     const closeSnackbar = (...args) => dispatch(closeSnackbarAction(...args))
 
     const logoutApi = useApi(accountApi.logout)
-    const { isCloud } = useConfig()
 
     const signOutClicked = () => {
         logoutApi.request()
@@ -62,7 +60,7 @@ const CloudMenuList = () => {
 
     return (
         <>
-            {isCloud && (
+            { (
                 <Box>
                     <Divider sx={{ height: '1px', borderColor: theme.palette.grey[900] + 25, my: 0 }} />
                     <List sx={{ p: '16px', py: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>

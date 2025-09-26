@@ -1,15 +1,9 @@
 import { useEffect, useState } from 'react'
-
-// material-ui
 import { BackdropLoader } from '@/components/loading/BackdropLoader'
 
-// project imports
 import MainCard from '@/components/cards/MainCard'
 
-// API
 import authApi from '@/api/auth'
-
-// Hooks
 import useApi from '@/hooks/useApi'
 
 const ResolveLoginPage = () => {

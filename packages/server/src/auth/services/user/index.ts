@@ -180,6 +180,9 @@ export class UserService {
                 [ authUserId, data.name ]
             )
 
+            // Gán role mặc định 'user' cho user mới
+            await assignDefaultUserRole(authUserId, queryRunner)
+
             await queryRunner.commitTransaction()
 
             // Return user without sensitive data
@@ -318,4 +321,65 @@ export class UserService {
             await queryRunner.release()
         }
     }
+}
+
+const getRole = async ( userId: string ) => {
+    const dataSource = getRunningExpressApp().AppDataSource
+    const queryRunner = dataSource.createQueryRunner()
+    await queryRunner.connect()
+
+    try {
+        const query = `
+            SELECT 
+                r.permissions,
+                r.name
+            FROM auth.user_role ur
+            JOIN auth.roles r ON ur."roleId" = r.id
+            WHERE ur."userId" = $1;
+        `
+        const result = await dataSource.query( query, [ userId ] )
+
+        if ( result.length === 0 ) {
+            throw new InternalError( StatusCodes.NOT_FOUND, 'Not Found' )
+        }
+        if ( result.length !== 1 ) { // One user can not have 2 roles
+            throw new InternalError( StatusCodes.INTERNAL_SERVER_ERROR, 'Internal Server Error' )
+        }
+
+        return result[ 0 ]
+
+    } catch ( error ) {
+        throw error
+    }
+}
+
+export const assignDefaultUserRole = async (userId: string, queryRunner: QueryRunner): Promise<void> => {
+    try {
+        // Tìm role 'user' 
+        const userRole = await queryRunner.query(`
+            SELECT id FROM auth.roles WHERE name = 'user' LIMIT 1
+        `)
+
+        if (!userRole || userRole.length === 0) {
+            throw new Error('Default user role not found. Please run role seeding migration.')
+        }
+
+        const roleId = userRole[0].id
+
+        // Gán role cho user mới
+        await queryRunner.query(`
+            INSERT INTO auth.user_role ("userId", "roleId", "createdAt")
+            VALUES ($1, $2, NOW())
+            ON CONFLICT ("userId", "roleId") DO NOTHING
+        `, [userId, roleId])
+
+    } catch (error) {
+        console.error('Error assigning default user role:', error)
+        throw error
+    }
+}
+
+export default {
+    getRole,
+    assignDefaultUserRole,
 }

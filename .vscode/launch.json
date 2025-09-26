@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Vite Dev Server",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/packages/ui",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug Vite in Edge",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:8080",  // nhớ đổi đúng port Vite
+      "webRoot": "${workspaceFolder}/packages/ui/src",
+      "sourceMaps": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Debug UI",
+      "configurations": ["Run Vite Dev Server", "Debug Vite in Edge"]
+    }
+  ]
+}

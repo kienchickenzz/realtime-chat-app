@@ -8,13 +8,13 @@ import { Divider, List, Typography } from '@mui/material'
 import NavItem from '../NavItem'
 import NavCollapse from '../NavCollapse'
 import { useAuth } from '@/hooks/useAuth'
-import { Available } from '@/ui-component/rbac/available'
+import { Available } from '@/components/rbac/available'
 
 // ==============================|| SIDEBAR MENU LIST GROUP ||============================== //
 
 const NavGroup = ({ item }) => {
     const theme = useTheme()
-    const { hasPermission, hasDisplay } = useAuth()
+    const { hasPermission } = useAuth()
 
     const listItems = (menu, level = 1) => {
         // Filter based on display and permission
@@ -39,12 +39,6 @@ const NavGroup = ({ item }) => {
         // Handle permission check
         if (menu.permission && !hasPermission(menu.permission)) {
             return false // Do not render if permission is lacking
-        }
-
-        // If `display` is defined, check against cloud/enterprise conditions
-        if (menu.display) {
-            const shouldsiplay = hasDisplay(menu.display)
-            return shouldsiplay
         }
 
         // If `display` is not defined, display by default

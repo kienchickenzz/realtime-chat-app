@@ -37,10 +37,10 @@ import { useTheme } from '@mui/material/styles'
 import PerfectScrollbar from 'react-perfect-scrollbar'
 
 // project imports
-import { PermissionListItemButton } from '@/ui-component/button/RBACButtons'
-import MainCard from '@/ui-component/cards/MainCard'
-import AboutDialog from '@/ui-component/dialog/AboutDialog'
-import Transitions from '@/ui-component/extended/Transitions'
+import { PermissionListItemButton } from '@/components/button/RBACButtons'
+import MainCard from '@/components/cards/MainCard'
+import AboutDialog from '@/components/dialog/AboutDialog'
+import Transitions from '@/components/extended/Transitions'
 
 // assets
 import ExportingGIF from '@/assets/images/Exporting.gif'
@@ -52,7 +52,6 @@ import exportImportApi from '@/api/exportimport'
 
 // Hooks
 import useApi from '@/hooks/useApi'
-import { useConfig } from '@/store/context/ConfigContext'
 import { getErrorMessage } from '@/utils/errorHandler'
 
 const dataToExport = [
@@ -208,7 +207,6 @@ const ProfileSection = ({ handleLogout }) => {
     const theme = useTheme()
 
     const customization = useSelector((state) => state.customization)
-    const { isCloud } = useConfig()
 
     const [open, setOpen] = useState(false)
     const [aboutDialogOpen, setAboutDialogOpen] = useState(false)

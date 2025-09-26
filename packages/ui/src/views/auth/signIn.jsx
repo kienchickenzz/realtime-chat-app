@@ -7,14 +7,10 @@ import { Stack, useTheme, Typography, Box, Alert, Button, Divider, Icon } from '
 import { IconExclamationCircle } from '@tabler/icons-react'
 import { LoadingButton } from '@mui/lab'
 
-// project imports
 import MainCard from '@/components/cards/MainCard'
 import { Input } from '@/components/input/Input'
 
-// Hooks
 import useApi from '@/hooks/useApi'
-
-// API
 import authApi from '@/api/auth'
 
 // utils
@@ -111,6 +107,12 @@ const SignInPage = () => {
                     )}
                     <Stack sx={{ gap: 1 }}>
                         <Typography variant='h1'>Sign In</Typography>
+                        <Typography variant='body2' sx={{ color: theme.palette.grey[600] }}>
+                            Don&apos;t have an account yet?{' '}
+                            <Link style={{ color: `${theme.palette.primary.main}` }} to='/register'>
+                                Sign Up
+                            </Link>
+                        </Typography>
                     </Stack>
                     <form onSubmit={doLogin}>
                         <Stack sx={{ width: '100%', flexDirection: 'column', alignItems: 'left', justifyContent: 'center', gap: 2 }}>

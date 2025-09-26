@@ -4,7 +4,8 @@ export type LoggedInUser = {
     id: string
     email: string
     name: string
-    permissions?: string[]
+    permissions: string[]
+    role: string
 }
 
 export enum ErrorMessage {

@@ -1,11 +1,10 @@
-import MainCard from '@/ui-component/cards/MainCard'
-import { Box, Stack, Typography } from '@mui/material'
-import unauthorizedSVG from '@/assets/images/unauthorized.svg'
-import { StyledButton } from '@/ui-component/button/StyledButton'
 import { Link } from 'react-router-dom'
 import { useSelector } from 'react-redux'
+import { Box, Stack, Typography } from '@mui/material'
 
-// ==============================|| UnauthorizedPage ||============================== //
+import MainCard from '@/components/cards/MainCard'
+import { StyledButton } from '@/components/button/StyledButton'
+import unauthorizedSVG from '@/assets/images/unauthorized.svg'
 
 const UnauthorizedPage = () => {
     const currentUser = useSelector((state) => state.auth.user)
